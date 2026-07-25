@@ -23,6 +23,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
       <Toolbar>
         <IconButton
           edge="start"
+          aria-label="Open navigation menu"
           onClick={onMenuClick}
           sx={{ mr: 1, display: { xs: "inline-flex", md: "none" } }}
         >
@@ -34,7 +35,10 @@ export function Navbar({ onMenuClick }: NavbarProps) {
         <Box display="flex" alignItems="center" gap={0.5}>
           <NotificationBell />
           <Tooltip title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-            <IconButton onClick={() => dispatch(toggleTheme())}>
+            <IconButton
+              aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              onClick={() => dispatch(toggleTheme())}
+            >
               {mode === "dark" ? (
                 <LightModeOutlinedIcon fontSize="small" />
               ) : (
@@ -53,7 +57,7 @@ export function Navbar({ onMenuClick }: NavbarProps) {
             </Typography>
           )}
           <Tooltip title="Logout">
-            <IconButton onClick={() => dispatch(logout())}>
+            <IconButton aria-label="Logout" onClick={() => dispatch(logout())}>
               <LogoutIcon fontSize="small" />
             </IconButton>
           </Tooltip>

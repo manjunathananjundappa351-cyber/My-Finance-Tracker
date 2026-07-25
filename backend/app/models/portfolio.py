@@ -42,3 +42,4 @@ class PortfolioHolding(Base):
     )
 
     user = relationship("User", back_populates="holdings")
+    tags = relationship("Tag", secondary="portfolio_tags", back_populates="portfolio_holdings")

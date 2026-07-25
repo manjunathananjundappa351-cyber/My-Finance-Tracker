@@ -1,5 +1,5 @@
 import { apiClient } from "@/api/axios";
-import { Goal, GoalCreatePayload } from "@/types/goal";
+import { Goal, GoalCreatePayload, GoalTransactions } from "@/types/goal";
 
 export const goalApi = {
   list: (params: { include_archived?: boolean; archived_only?: boolean } = {}) =>
@@ -15,4 +15,7 @@ export const goalApi = {
   restore: (id: number) => apiClient.post<Goal>(`/goals/${id}/restore`).then((res) => res.data),
 
   remove: (id: number) => apiClient.delete(`/goals/${id}`),
+
+  transactions: (id: number) =>
+    apiClient.get<GoalTransactions>(`/goals/${id}/transactions`).then((res) => res.data),
 };

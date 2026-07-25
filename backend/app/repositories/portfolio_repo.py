@@ -1,7 +1,7 @@
 from typing import Optional
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.portfolio import PortfolioHolding
 
@@ -9,20 +9,26 @@ from app.models.portfolio import PortfolioHolding
 def list_holdings(
     db: Session, user_id: int, include_archived: bool = False, archived_only: bool = False
 ) -> list[PortfolioHolding]:
-    stmt = select(PortfolioHolding).where(PortfolioHolding.user_id == user_id)
+    stmt = (
+        select(PortfolioHolding)
+        .options(joinedload(PortfolioHolding.tags))
+        .where(PortfolioHolding.user_id == user_id)
+    )
     if archived_only:
         stmt = stmt.where(PortfolioHolding.is_archived.is_(True))
     elif not include_archived:
         stmt = stmt.where(PortfolioHolding.is_archived.is_(False))
     stmt = stmt.order_by(PortfolioHolding.created_at.desc())
-    return list(db.execute(stmt).scalars().all())
+    return list(db.execute(stmt).unique().scalars().all())
 
 
 def get_holding(db: Session, user_id: int, holding_id: int) -> Optional[PortfolioHolding]:
-    stmt = select(PortfolioHolding).where(
-        PortfolioHolding.id == holding_id, PortfolioHolding.user_id == user_id
+    stmt = (
+        select(PortfolioHolding)
+        .options(joinedload(PortfolioHolding.tags))
+        .where(PortfolioHolding.id == holding_id, PortfolioHolding.user_id == user_id)
     )
-    return db.execute(stmt).scalar_one_or_none()
+    return db.execute(stmt).unique().scalar_one_or_none()
 
 
 def create_holding(db: Session, user_id: int, **fields) -> PortfolioHolding:

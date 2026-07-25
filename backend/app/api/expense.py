@@ -9,6 +9,8 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.common import BulkIdsRequest
 from app.schemas.expense import (
+    ExpenseBulkImportRequest,
+    ExpenseBulkImportResult,
     ExpenseCategoryCreate,
     ExpenseCategoryOut,
     ExpenseCreate,
@@ -68,7 +70,20 @@ def create_expense(
         is_recurring=payload.is_recurring,
         notes=payload.notes,
         tag_ids=payload.tag_ids,
+        goal_id=payload.goal_id,
     )
+
+
+@router.post("/bulk/import", response_model=ExpenseBulkImportResult)
+def bulk_import(
+    payload: ExpenseBulkImportRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    imported, skipped, errors = expense_service.bulk_import(
+        db, current_user.id, [item.model_dump() for item in payload.items]
+    )
+    return ExpenseBulkImportResult(imported=imported, skipped=skipped, errors=errors)
 
 
 @router.post("/bulk/archive", status_code=204)
@@ -125,6 +140,8 @@ def update_expense(
         is_recurring=payload.is_recurring,
         notes=payload.notes,
         tag_ids=payload.tag_ids,
+        goal_id=payload.goal_id,
+        clear_goal=payload.clear_goal,
     )
 
 

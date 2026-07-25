@@ -33,3 +33,17 @@ class GoalOut(BaseModel):
     progress_pct: float
     months_remaining: int
     monthly_contribution_needed: float
+
+
+class GoalTransactionItem(BaseModel):
+    id: int
+    type: str
+    amount: float
+    description: str
+    category_name: str
+    txn_date: date
+
+
+class GoalTransactions(BaseModel):
+    expenses: list[GoalTransactionItem]
+    income: list[GoalTransactionItem]

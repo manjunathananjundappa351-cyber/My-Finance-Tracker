@@ -7,6 +7,7 @@ from app.exceptions import NotFoundError
 from app.models.loan import Loan
 from app.repositories import loan_repo
 from app.schemas.loan import LoanOut
+from app.services import audit_log_service
 from app.utils.recurring import add_months
 
 
@@ -52,7 +53,9 @@ def total_outstanding(db: Session, user_id: int) -> float:
 
 
 def create_loan(db: Session, user_id: int, **fields: Any) -> Loan:
-    return loan_repo.create_loan(db, user_id, **fields)
+    loan = loan_repo.create_loan(db, user_id, **fields)
+    audit_log_service.log(db, user_id, "create", "loan", loan.id, f"Added loan: {loan.name}")
+    return loan
 
 
 def get_loan_or_404(db: Session, user_id: int, loan_id: int) -> Loan:
@@ -64,14 +67,23 @@ def get_loan_or_404(db: Session, user_id: int, loan_id: int) -> Loan:
 
 def update_loan(db: Session, user_id: int, loan_id: int, **fields: Any) -> Loan:
     loan = get_loan_or_404(db, user_id, loan_id)
-    return loan_repo.update_loan(db, loan, **fields)
+    updated = loan_repo.update_loan(db, loan, **fields)
+    audit_log_service.log(db, user_id, "update", "loan", updated.id, f"Updated loan: {updated.name}")
+    return updated
 
 
 def set_archived(db: Session, user_id: int, loan_id: int, archived: bool) -> Loan:
     loan = get_loan_or_404(db, user_id, loan_id)
-    return loan_repo.set_archived(db, loan, archived)
+    updated = loan_repo.set_archived(db, loan, archived)
+    audit_log_service.log(
+        db, user_id, "archive" if archived else "restore", "loan", updated.id,
+        f"{'Archived' if archived else 'Restored'} loan: {updated.name}",
+    )
+    return updated
 
 
 def delete_loan(db: Session, user_id: int, loan_id: int) -> None:
     loan = get_loan_or_404(db, user_id, loan_id)
+    summary = f"Permanently deleted loan: {loan.name}"
     loan_repo.delete_loan(db, loan)
+    audit_log_service.log(db, user_id, "delete", "loan", loan_id, summary)

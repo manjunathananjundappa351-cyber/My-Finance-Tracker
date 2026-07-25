@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 
 from app.api import (
+    audit_log,
     auth,
+    backup,
     budget,
     dashboard,
     expense,
@@ -36,3 +38,5 @@ api_router.include_router(gamification.router)
 api_router.include_router(tag.router)
 api_router.include_router(system.router)
 api_router.include_router(search.router)
+api_router.include_router(audit_log.router)
+api_router.include_router(backup.router)

@@ -68,6 +68,7 @@ def create_income(
         is_recurring=payload.is_recurring,
         notes=payload.notes,
         tag_ids=payload.tag_ids,
+        goal_id=payload.goal_id,
     )
 
 
@@ -125,6 +126,8 @@ def update_income(
         is_recurring=payload.is_recurring,
         notes=payload.notes,
         tag_ids=payload.tag_ids,
+        goal_id=payload.goal_id,
+        clear_goal=payload.clear_goal,
     )
 
 

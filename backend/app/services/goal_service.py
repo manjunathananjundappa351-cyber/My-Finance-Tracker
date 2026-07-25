@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.exceptions import NotFoundError
 from app.models.goal import Goal
-from app.repositories import goal_repo
-from app.schemas.goal import GoalOut
+from app.repositories import expense_repo, goal_repo, income_repo
+from app.schemas.goal import GoalOut, GoalTransactionItem, GoalTransactions
+from app.services import audit_log_service
 
 
 def _months_remaining(target_date: date) -> int:
@@ -59,6 +60,7 @@ def create_goal(
     goal = goal_repo.create_goal(db, user_id, name, target_amount, current_amount, target_date)
     if notes:
         goal = goal_repo.update_goal(db, goal, notes=notes)
+    audit_log_service.log(db, user_id, "create", "goal", goal.id, f"Added goal: {goal.name}")
     return to_goal_out(goal)
 
 
@@ -89,15 +91,44 @@ def update_goal(
         target_date=target_date,
         notes=notes,
     )
+    audit_log_service.log(db, user_id, "update", "goal", goal.id, f"Updated goal: {goal.name}")
     return to_goal_out(goal)
 
 
 def set_archived(db: Session, user_id: int, goal_id: int, archived: bool) -> GoalOut:
     goal = get_goal_or_404(db, user_id, goal_id)
     goal = goal_repo.set_archived(db, goal, archived)
+    audit_log_service.log(
+        db, user_id, "archive" if archived else "restore", "goal", goal.id,
+        f"{'Archived' if archived else 'Restored'} goal: {goal.name}",
+    )
     return to_goal_out(goal)
 
 
 def delete_goal(db: Session, user_id: int, goal_id: int) -> None:
     goal = get_goal_or_404(db, user_id, goal_id)
+    summary = f"Permanently deleted goal: {goal.name}"
     goal_repo.delete_goal(db, goal)
+    audit_log_service.log(db, user_id, "delete", "goal", goal_id, summary)
+
+
+def get_goal_transactions(db: Session, user_id: int, goal_id: int) -> GoalTransactions:
+    get_goal_or_404(db, user_id, goal_id)
+    expenses = expense_repo.list_by_goal(db, user_id, goal_id)
+    income = income_repo.list_by_goal(db, user_id, goal_id)
+    return GoalTransactions(
+        expenses=[
+            GoalTransactionItem(
+                id=e.id, type="expense", amount=e.amount, description=e.description,
+                category_name=e.category.name, txn_date=e.expense_date,
+            )
+            for e in expenses
+        ],
+        income=[
+            GoalTransactionItem(
+                id=i.id, type="income", amount=i.amount, description=i.description,
+                category_name=i.category.name, txn_date=i.income_date,
+            )
+            for i in income
+        ],
+    )

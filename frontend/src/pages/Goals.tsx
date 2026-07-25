@@ -1,6 +1,9 @@
 import AddIcon from "@mui/icons-material/Add";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
+import RestoreIcon from "@mui/icons-material/Restore";
 import {
   Alert,
   Box,
@@ -15,7 +18,14 @@ import {
   IconButton,
   LinearProgress,
   Stack,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { motion } from "framer-motion";
@@ -26,9 +36,12 @@ import { LoadingButton } from "@/components/LoadingButton";
 import { StatCardsSkeleton } from "@/components/Skeletons";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useQuickAdd } from "@/hooks/useQuickAdd";
 import { extractErrorMessage, useToast } from "@/hooks/useToast";
-import { Goal } from "@/types/goal";
+import { Goal, GoalTransactions } from "@/types/goal";
 import { formatCurrency } from "@/utils/format";
+
+type ViewMode = "active" | "archived";
 
 export function Goals() {
   useDocumentTitle("Goals");
@@ -40,20 +53,26 @@ export function Goals() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Goal | null>(null);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("active");
 
   const [name, setName] = useState("");
   const [targetAmount, setTargetAmount] = useState("");
   const [currentAmount, setCurrentAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [notes, setNotes] = useState("");
+
+  const [transactionsGoal, setTransactionsGoal] = useState<Goal | null>(null);
+  const [transactions, setTransactions] = useState<GoalTransactions | null>(null);
 
   function loadData() {
     goalApi
-      .list()
+      .list({ archived_only: viewMode === "archived" })
       .then(setGoals)
       .catch(() => setError("Could not load goals."));
   }
 
-  useEffect(loadData, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadData, [viewMode]);
 
   function openCreate() {
     setEditing(null);
@@ -61,8 +80,11 @@ export function Goals() {
     setTargetAmount("");
     setCurrentAmount("0");
     setTargetDate("");
+    setNotes("");
     setDialogOpen(true);
   }
+
+  useQuickAdd(openCreate);
 
   function openEdit(goal: Goal) {
     setEditing(goal);
@@ -70,6 +92,7 @@ export function Goals() {
     setTargetAmount(String(goal.target_amount));
     setCurrentAmount(String(goal.current_amount));
     setTargetDate(goal.target_date);
+    setNotes(goal.notes);
     setDialogOpen(true);
   }
 
@@ -82,6 +105,7 @@ export function Goals() {
         target_amount: parseFloat(targetAmount),
         current_amount: parseFloat(currentAmount || "0"),
         target_date: targetDate,
+        notes,
       };
       if (editing) {
         await goalApi.update(editing.id, payload);
@@ -99,16 +123,51 @@ export function Goals() {
     }
   }
 
-  async function handleDelete(goal: Goal) {
-    const ok = await confirm("Delete goal?", `Remove "${goal.name}"?`);
+  async function handleArchive(goal: Goal) {
+    try {
+      await goalApi.archive(goal.id);
+      toast.successWithUndo(`"${goal.name}" archived`, async () => {
+        await goalApi.restore(goal.id);
+        loadData();
+      });
+      loadData();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Could not archive goal"));
+    }
+  }
+
+  async function handleRestore(goal: Goal) {
+    try {
+      await goalApi.restore(goal.id);
+      toast.success(`"${goal.name}" restored`);
+      loadData();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Could not restore goal"));
+    }
+  }
+
+  async function handleDeletePermanently(goal: Goal) {
+    const ok = await confirm(
+      "Delete permanently?",
+      `Permanently delete "${goal.name}"? This can't be undone.`
+    );
     if (!ok) return;
     try {
       await goalApi.remove(goal.id);
-      toast.success("Goal deleted");
+      toast.success("Goal permanently deleted");
       loadData();
     } catch (err) {
       toast.error(extractErrorMessage(err, "Could not delete goal"));
     }
+  }
+
+  function openTransactions(goal: Goal) {
+    setTransactionsGoal(goal);
+    setTransactions(null);
+    goalApi
+      .transactions(goal.id)
+      .then(setTransactions)
+      .catch(() => toast.error("Could not load linked transactions"));
   }
 
   if (error) return <Alert severity="error">{error}</Alert>;
@@ -116,19 +175,31 @@ export function Goals() {
 
   return (
     <Box display="flex" flexDirection="column" gap={3}>
-      <Box display="flex" justifyContent="space-between" alignItems="center">
+      <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
         <Typography variant="h4" fontWeight={700} letterSpacing="-0.02em">
           Goals
         </Typography>
-        <LoadingButton variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          Add Goal
-        </LoadingButton>
+        <Box display="flex" gap={1}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={viewMode}
+            onChange={(_, v) => v && setViewMode(v)}
+          >
+            <ToggleButton value="active">Active</ToggleButton>
+            <ToggleButton value="archived">Archived</ToggleButton>
+          </ToggleButtonGroup>
+          <LoadingButton variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            Add Goal
+          </LoadingButton>
+        </Box>
       </Box>
 
       {goals.length === 0 ? (
         <Alert severity="info">
-          No goals yet. Add one — e.g. an emergency fund or a house down payment — to track
-          progress toward it.
+          {viewMode === "archived"
+            ? "No archived goals."
+            : "No goals yet. Add one — e.g. an emergency fund or a house down payment — to track progress toward it."}
         </Alert>
       ) : (
         <Grid container spacing={2}>
@@ -147,12 +218,25 @@ export function Goals() {
                       {g.name}
                     </Typography>
                     <Stack direction="row">
-                      <IconButton size="small" onClick={() => openEdit(g)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(g)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                      {viewMode === "active" ? (
+                        <>
+                          <IconButton size="small" aria-label="Edit" onClick={() => openEdit(g)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" aria-label="Archive" onClick={() => handleArchive(g)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      ) : (
+                        <>
+                          <IconButton size="small" aria-label="Restore" onClick={() => handleRestore(g)}>
+                            <RestoreIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" aria-label="Delete permanently" onClick={() => handleDeletePermanently(g)}>
+                            <DeleteForeverIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      )}
                     </Stack>
                   </Stack>
                   <Typography variant="body2" color="text.secondary" mt={0.5}>
@@ -171,6 +255,14 @@ export function Goals() {
                       ? `${formatCurrency(g.monthly_contribution_needed)}/mo needed`
                       : "Target date reached"}
                   </Typography>
+                  <Button
+                    size="small"
+                    startIcon={<ReceiptLongOutlinedIcon />}
+                    onClick={() => openTransactions(g)}
+                    sx={{ mt: 1 }}
+                  >
+                    Linked Transactions
+                  </Button>
                 </CardContent>
               </Card>
             </Grid>
@@ -204,12 +296,99 @@ export function Goals() {
             InputLabelProps={{ shrink: true }}
             fullWidth
           />
+          <TextField
+            label="Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            multiline
+            minRows={2}
+            fullWidth
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
           <LoadingButton variant="contained" loading={saving} onClick={handleSave}>
             Save
           </LoadingButton>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={transactionsGoal !== null}
+        onClose={() => setTransactionsGoal(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Linked Transactions — {transactionsGoal?.name}</DialogTitle>
+        <DialogContent>
+          {!transactions ? (
+            <Typography color="text.secondary" py={2}>
+              Loading…
+            </Typography>
+          ) : transactions.expenses.length === 0 && transactions.income.length === 0 ? (
+            <Typography color="text.secondary" py={2}>
+              No expenses or income linked to this goal yet.
+            </Typography>
+          ) : (
+            <Box display="flex" flexDirection="column" gap={2} mt={1}>
+              {transactions.expenses.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={600} mb={0.5}>
+                    Expenses
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Date</TableCell>
+                        <TableCell>Category</TableCell>
+                        <TableCell>Description</TableCell>
+                        <TableCell align="right">Amount</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {transactions.expenses.map((t) => (
+                        <TableRow key={`e-${t.id}`}>
+                          <TableCell>{t.txn_date}</TableCell>
+                          <TableCell>{t.category_name}</TableCell>
+                          <TableCell>{t.description}</TableCell>
+                          <TableCell align="right">{formatCurrency(t.amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+              {transactions.income.length > 0 && (
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={600} mb={0.5}>
+                    Income
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Date</TableCell>
+                        <TableCell>Category</TableCell>
+                        <TableCell>Description</TableCell>
+                        <TableCell align="right">Amount</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {transactions.income.map((t) => (
+                        <TableRow key={`i-${t.id}`}>
+                          <TableCell>{t.txn_date}</TableCell>
+                          <TableCell>{t.category_name}</TableCell>
+                          <TableCell>{t.description}</TableCell>
+                          <TableCell align="right">{formatCurrency(t.amount)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTransactionsGoal(null)}>Close</Button>
         </DialogActions>
       </Dialog>
       {ConfirmDialog}

@@ -29,6 +29,7 @@ class ExpenseCreate(BaseModel):
     expense_date: date
     is_recurring: bool = False
     tag_ids: list[int] = Field(default_factory=list)
+    goal_id: Optional[int] = None
 
 
 class ExpenseUpdate(BaseModel):
@@ -39,6 +40,8 @@ class ExpenseUpdate(BaseModel):
     expense_date: Optional[date] = None
     is_recurring: Optional[bool] = None
     tag_ids: Optional[list[int]] = None
+    goal_id: Optional[int] = None
+    clear_goal: bool = False
 
 
 class ExpenseOut(BaseModel):
@@ -54,3 +57,21 @@ class ExpenseOut(BaseModel):
     is_archived: bool
     recurring_parent_id: Optional[int]
     tags: list[TagOut]
+    goal_id: Optional[int]
+
+
+class ExpenseImportItem(BaseModel):
+    category_name: str = Field(min_length=1)
+    amount: float = Field(gt=0)
+    description: str = ""
+    expense_date: date
+
+
+class ExpenseBulkImportRequest(BaseModel):
+    items: list[ExpenseImportItem]
+
+
+class ExpenseBulkImportResult(BaseModel):
+    imported: int
+    skipped: int
+    errors: list[str]

@@ -18,3 +18,17 @@ export interface GoalCreatePayload {
   target_date: string;
   notes?: string;
 }
+
+export interface GoalTransactionItem {
+  id: number;
+  type: "expense" | "income";
+  amount: number;
+  description: string;
+  category_name: string;
+  txn_date: string;
+}
+
+export interface GoalTransactions {
+  expenses: GoalTransactionItem[];
+  income: GoalTransactionItem[];
+}

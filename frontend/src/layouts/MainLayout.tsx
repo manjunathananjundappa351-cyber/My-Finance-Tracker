@@ -5,6 +5,7 @@ import { Outlet, useLocation } from "react-router-dom";
 
 import { CommandPalette } from "@/components/CommandPalette";
 import { Navbar } from "@/components/Navbar";
+import { QuickActionsFab } from "@/components/QuickActionsFab";
 import { Sidebar } from "@/components/Sidebar";
 
 export function MainLayout() {
@@ -16,6 +17,7 @@ export function MainLayout() {
       <Navbar onMenuClick={() => setMobileOpen(true)} />
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <CommandPalette />
+      <QuickActionsFab />
       <Box component="main" flexGrow={1} p={3} minHeight="100vh" bgcolor="background.default">
         <Toolbar />
         <AnimatePresence mode="wait">

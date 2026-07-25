@@ -1,6 +1,7 @@
 from app.constants import DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES
 from app.database.base import Base
 from app.database.connection import engine
+from app.models import audit_log as audit_log_models  # noqa: F401
 from app.models import budget as budget_models  # noqa: F401
 from app.models import expense as expense_models  # noqa: F401
 from app.models import goal as goal_models  # noqa: F401

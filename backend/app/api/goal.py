@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database.session import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
-from app.schemas.goal import GoalCreate, GoalOut, GoalUpdate
+from app.schemas.goal import GoalCreate, GoalOut, GoalTransactions, GoalUpdate
 from app.services import goal_service
 
 router = APIRouter(prefix="/goals", tags=["goals"])
@@ -81,3 +81,12 @@ def delete_goal(
     db: Session = Depends(get_db),
 ):
     goal_service.delete_goal(db, current_user.id, goal_id)
+
+
+@router.get("/{goal_id}/transactions", response_model=GoalTransactions)
+def get_goal_transactions(
+    goal_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return goal_service.get_goal_transactions(db, current_user.id, goal_id)

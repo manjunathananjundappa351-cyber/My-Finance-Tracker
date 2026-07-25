@@ -1,8 +1,10 @@
 import { apiClient } from "@/api/axios";
 import {
   Expense,
+  ExpenseBulkImportResult,
   ExpenseCategory,
   ExpenseCreatePayload,
+  ExpenseImportItem,
 } from "@/types/expense";
 
 export interface ExpenseFilters {
@@ -41,6 +43,10 @@ export const expenseApi = {
   bulkArchive: (ids: number[]) => apiClient.post("/expenses/bulk/archive", { ids }),
   bulkRestore: (ids: number[]) => apiClient.post("/expenses/bulk/restore", { ids }),
   bulkDelete: (ids: number[]) => apiClient.post("/expenses/bulk/delete", { ids }),
+  bulkImport: (items: ExpenseImportItem[]) =>
+    apiClient
+      .post<ExpenseBulkImportResult>("/expenses/bulk/import", { items })
+      .then((res) => res.data),
 
   remove: (id: number) => apiClient.delete(`/expenses/${id}`),
 };

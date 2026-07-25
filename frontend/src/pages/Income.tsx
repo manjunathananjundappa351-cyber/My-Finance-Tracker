@@ -36,6 +36,7 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 
+import { goalApi } from "@/api/goalApi";
 import { incomeApi } from "@/api/incomeApi";
 import { PieChart } from "@/components/charts/PieChart";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
@@ -46,7 +47,9 @@ import { TableSkeleton } from "@/components/Skeletons";
 import { TagsInput } from "@/components/TagsInput";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useQuickAdd } from "@/hooks/useQuickAdd";
 import { extractErrorMessage, useToast } from "@/hooks/useToast";
+import { Goal } from "@/types/goal";
 import { Income as IncomeEntry, IncomeCategory } from "@/types/income";
 import { Tag } from "@/types/tag";
 import { formatCurrency } from "@/utils/format";
@@ -62,6 +65,7 @@ export function Income() {
 
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[] | null>(null);
   const [categories, setCategories] = useState<IncomeCategory[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<IncomeEntry | null>(null);
@@ -87,6 +91,7 @@ export function Income() {
   const [incomeDate, setIncomeDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isRecurring, setIsRecurring] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [goalId, setGoalId] = useState<number | "">("");
 
   function loadData() {
     Promise.all([
@@ -108,6 +113,10 @@ export function Income() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadData, [startDate, endDate, filterCategoryId, viewMode]);
+
+  useEffect(() => {
+    goalApi.list().then(setGoals).catch(() => undefined);
+  }, []);
 
   const filtered = useMemo(() => {
     if (!incomeEntries) return [];
@@ -159,8 +168,11 @@ export function Income() {
     setIncomeDate(new Date().toISOString().slice(0, 10));
     setIsRecurring(false);
     setSelectedTags([]);
+    setGoalId("");
     setDialogOpen(true);
   }
+
+  useQuickAdd(openCreate);
 
   function openEdit(income: IncomeEntry) {
     setEditing(income);
@@ -171,6 +183,7 @@ export function Income() {
     setIncomeDate(income.income_date);
     setIsRecurring(income.is_recurring);
     setSelectedTags(income.tags);
+    setGoalId(income.goal_id ?? "");
     setDialogOpen(true);
   }
 
@@ -186,6 +199,8 @@ export function Income() {
         income_date: incomeDate,
         is_recurring: isRecurring,
         tag_ids: selectedTags.map((t) => t.id),
+        goal_id: goalId === "" ? null : goalId,
+        clear_goal: goalId === "" && editing?.goal_id != null,
       };
       if (editing) {
         await incomeApi.update(editing.id, payload);
@@ -476,25 +491,33 @@ export function Income() {
                               sx={{ bgcolor: t.color, color: "#fff", height: 18, fontSize: 11 }}
                             />
                           ))}
+                          {i.goal_id != null && (
+                            <Chip
+                              label={goals.find((g) => g.id === i.goal_id)?.name ?? "Goal"}
+                              size="small"
+                              variant="outlined"
+                              sx={{ height: 18, fontSize: 11 }}
+                            />
+                          )}
                         </Box>
                       </TableCell>
                       <TableCell align="right">{formatCurrency(i.amount)}</TableCell>
                       <TableCell align="right">
                         {viewMode === "active" ? (
                           <>
-                            <IconButton size="small" onClick={() => openEdit(i)}>
+                            <IconButton size="small" aria-label="Edit" onClick={() => openEdit(i)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => handleArchive(i)}>
+                            <IconButton size="small" aria-label="Archive" onClick={() => handleArchive(i)}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </>
                         ) : (
                           <>
-                            <IconButton size="small" onClick={() => handleRestore(i)}>
+                            <IconButton size="small" aria-label="Restore" onClick={() => handleRestore(i)}>
                               <RestoreIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => handleDeletePermanently(i)}>
+                            <IconButton size="small" aria-label="Delete permanently" onClick={() => handleDeletePermanently(i)}>
                               <DeleteForeverIcon fontSize="small" />
                             </IconButton>
                           </>
@@ -575,6 +598,20 @@ export function Income() {
             fullWidth
           />
           <TagsInput value={selectedTags} onChange={setSelectedTags} />
+          <TextField
+            select
+            label="Link to Goal (optional)"
+            value={goalId}
+            onChange={(e) => setGoalId(e.target.value === "" ? "" : Number(e.target.value))}
+            fullWidth
+          >
+            <MenuItem value="">No goal</MenuItem>
+            {goals.map((g) => (
+              <MenuItem key={g.id} value={g.id}>
+                {g.name}
+              </MenuItem>
+            ))}
+          </TextField>
           <TextField
             label="Notes"
             value={notes}

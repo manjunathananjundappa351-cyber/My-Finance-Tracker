@@ -1,9 +1,12 @@
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import CalculateOutlinedIcon from "@mui/icons-material/CalculateOutlined";
+import CalendarMonthOutlinedIcon from "@mui/icons-material/CalendarMonthOutlined";
 import CreditCardOutlinedIcon from "@mui/icons-material/CreditCardOutlined";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import FlagOutlinedIcon from "@mui/icons-material/FlagOutlined";
+import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import MenuBookOutlinedIcon from "@mui/icons-material/MenuBookOutlined";
+import MonitorHeartOutlinedIcon from "@mui/icons-material/MonitorHeartOutlined";
 import PaidIcon from "@mui/icons-material/Paid";
 import SavingsOutlinedIcon from "@mui/icons-material/SavingsOutlined";
 import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
@@ -34,7 +37,10 @@ const NAV_ITEMS = [
   { label: "Loans", path: "/loans", icon: <CreditCardOutlinedIcon fontSize="small" /> },
   { label: "Trading Journal", path: "/trades", icon: <MenuBookOutlinedIcon fontSize="small" /> },
   { label: "SIP Calculator", path: "/sip-calculator", icon: <CalculateOutlinedIcon fontSize="small" /> },
+  { label: "Calendar", path: "/calendar", icon: <CalendarMonthOutlinedIcon fontSize="small" /> },
+  { label: "Activity", path: "/activity", icon: <HistoryOutlinedIcon fontSize="small" /> },
   { label: "Settings", path: "/settings", icon: <SettingsOutlinedIcon fontSize="small" /> },
+  { label: "System Health", path: "/system-health", icon: <MonitorHeartOutlinedIcon fontSize="small" /> },
 ];
 
 interface SidebarProps {

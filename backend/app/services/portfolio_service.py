@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.exceptions import NotFoundError
 from app.models.portfolio import PortfolioHolding
-from app.repositories import portfolio_repo
+from app.repositories import portfolio_repo, tag_repo
 from app.schemas.portfolio import PortfolioHoldingOut
+from app.services import audit_log_service
 
 
 def _compute_cagr_pct(invested_value: float, current_value: float, buy_date: date) -> Optional[float]:
@@ -39,6 +40,7 @@ def to_holding_out(holding: PortfolioHolding) -> PortfolioHoldingOut:
         stop_loss=holding.stop_loss,
         notes=holding.notes,
         is_archived=holding.is_archived,
+        tags=holding.tags,
         invested_value=invested_value,
         current_value=current_value,
         profit_loss=profit_loss,
@@ -54,7 +56,13 @@ def list_holdings(
 
 
 def create_holding(db: Session, user_id: int, **fields: Any) -> PortfolioHolding:
-    return portfolio_repo.create_holding(db, user_id, **fields)
+    tag_ids = fields.pop("tag_ids", None)
+    fields["tags"] = tag_repo.get_tags_by_ids(db, user_id, tag_ids or [])
+    holding = portfolio_repo.create_holding(db, user_id, **fields)
+    audit_log_service.log(
+        db, user_id, "create", "portfolio_holding", holding.id, f"Added holding: {holding.symbol}"
+    )
+    return holding
 
 
 def get_holding_or_404(db: Session, user_id: int, holding_id: int) -> PortfolioHolding:
@@ -68,14 +76,29 @@ def update_holding(
     db: Session, user_id: int, holding_id: int, **fields: Any
 ) -> PortfolioHolding:
     holding = get_holding_or_404(db, user_id, holding_id)
-    return portfolio_repo.update_holding(db, holding, **fields)
+    if "tag_ids" in fields:
+        tag_ids = fields.pop("tag_ids")
+        if tag_ids is not None:
+            fields["tags"] = tag_repo.get_tags_by_ids(db, user_id, tag_ids)
+    updated = portfolio_repo.update_holding(db, holding, **fields)
+    audit_log_service.log(
+        db, user_id, "update", "portfolio_holding", updated.id, f"Updated holding: {updated.symbol}"
+    )
+    return updated
 
 
 def set_archived(db: Session, user_id: int, holding_id: int, archived: bool) -> PortfolioHolding:
     holding = get_holding_or_404(db, user_id, holding_id)
-    return portfolio_repo.set_archived(db, holding, archived)
+    updated = portfolio_repo.set_archived(db, holding, archived)
+    audit_log_service.log(
+        db, user_id, "archive" if archived else "restore", "portfolio_holding", updated.id,
+        f"{'Archived' if archived else 'Restored'} holding: {updated.symbol}",
+    )
+    return updated
 
 
 def delete_holding(db: Session, user_id: int, holding_id: int) -> None:
     holding = get_holding_or_404(db, user_id, holding_id)
+    summary = f"Permanently deleted holding: {holding.symbol}"
     portfolio_repo.delete_holding(db, holding)
+    audit_log_service.log(db, user_id, "delete", "portfolio_holding", holding_id, summary)

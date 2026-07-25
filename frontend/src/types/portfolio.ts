@@ -1,3 +1,5 @@
+import { Tag } from "@/types/tag";
+
 export type AssetType =
   | "stock"
   | "etf"
@@ -26,6 +28,7 @@ export interface PortfolioHolding {
   stop_loss: number | null;
   notes: string;
   is_archived: boolean;
+  tags: Tag[];
   invested_value: number;
   current_value: number;
   profit_loss: number;
@@ -47,4 +50,5 @@ export interface PortfolioHoldingCreatePayload {
   target_price?: number | null;
   stop_loss?: number | null;
   notes?: string;
+  tag_ids?: number[];
 }

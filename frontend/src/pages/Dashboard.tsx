@@ -22,6 +22,7 @@ import { BarChart } from "@/components/charts/BarChart";
 import { LineChart } from "@/components/charts/LineChart";
 import { PieChart } from "@/components/charts/PieChart";
 import { SankeyChart } from "@/components/charts/SankeyChart";
+import { WaterfallChart } from "@/components/charts/WaterfallChart";
 import { GamificationBadges } from "@/components/GamificationBadges";
 import { HealthScoreCard } from "@/components/HealthScoreCard";
 import { DashboardSkeleton } from "@/components/Skeletons";
@@ -78,6 +79,15 @@ function buildCashFlowSankey(summary: DashboardSummary) {
   return { nodes: Array.from(nodes), links };
 }
 
+function buildCashFlowWaterfall(summary: DashboardSummary) {
+  const steps = [{ name: "Income", value: summary.monthly_income }];
+  for (const c of summary.expense_allocation) {
+    if (c.amount <= 0) continue;
+    steps.push({ name: c.label, value: -c.amount });
+  }
+  return steps;
+}
+
 export function Dashboard() {
   useDocumentTitle("Dashboard");
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -108,6 +118,7 @@ export function Dashboard() {
 
   const firstName = user?.full_name?.split(" ")[0];
   const sankey = buildCashFlowSankey(summary);
+  const waterfallSteps = buildCashFlowWaterfall(summary);
 
   return (
     <Box display="flex" flexDirection="column" gap={3}>
@@ -202,6 +213,13 @@ export function Dashboard() {
           <Grid item xs={12}>
             <MotionPaper delay={0.2}>
               <SankeyChart title="Cash Flow Breakdown (this month)" nodes={sankey.nodes} links={sankey.links} />
+            </MotionPaper>
+          </Grid>
+        )}
+        {waterfallSteps.length > 1 && (
+          <Grid item xs={12}>
+            <MotionPaper delay={0.24}>
+              <WaterfallChart title="Income to Savings (this month)" steps={waterfallSteps} />
             </MotionPaper>
           </Grid>
         )}

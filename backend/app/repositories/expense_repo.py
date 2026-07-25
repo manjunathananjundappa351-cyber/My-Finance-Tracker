@@ -81,6 +81,7 @@ def create_expense(
     recurring_parent_id: Optional[int] = None,
     notes: str = "",
     tags: Optional[list[Tag]] = None,
+    goal_id: Optional[int] = None,
 ) -> Expense:
     expense = Expense(
         user_id=user_id,
@@ -92,6 +93,7 @@ def create_expense(
         is_recurring=is_recurring,
         recurring_parent_id=recurring_parent_id,
         tags=tags or [],
+        goal_id=goal_id,
     )
     db.add(expense)
     db.commit()
@@ -132,6 +134,23 @@ def set_archived(db: Session, expense: Expense, archived: bool) -> Expense:
     db.commit()
     db.refresh(expense)
     return expense
+
+
+def set_goal(db: Session, expense: Expense, goal_id: Optional[int]) -> Expense:
+    expense.goal_id = goal_id
+    db.commit()
+    db.refresh(expense)
+    return expense
+
+
+def list_by_goal(db: Session, user_id: int, goal_id: int) -> list[Expense]:
+    stmt = (
+        select(Expense)
+        .options(joinedload(Expense.category))
+        .where(Expense.user_id == user_id, Expense.goal_id == goal_id)
+        .order_by(Expense.expense_date.desc())
+    )
+    return list(db.execute(stmt).unique().scalars().all())
 
 
 def delete_expense(db: Session, expense: Expense) -> None:

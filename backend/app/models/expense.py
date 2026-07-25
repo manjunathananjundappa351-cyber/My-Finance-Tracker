@@ -36,6 +36,7 @@ class Expense(Base):
     recurring_parent_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("expenses.id"), nullable=True
     )
+    goal_id: Mapped[Optional[int]] = mapped_column(ForeignKey("goals.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
@@ -43,3 +44,4 @@ class Expense(Base):
     user = relationship("User", back_populates="expenses")
     category = relationship("ExpenseCategory", back_populates="expenses")
     tags = relationship("Tag", secondary="expense_tags", back_populates="expenses")
+    goal = relationship("Goal")

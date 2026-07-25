@@ -26,6 +26,7 @@ class IncomeCreate(BaseModel):
     income_date: date
     is_recurring: bool = False
     tag_ids: list[int] = Field(default_factory=list)
+    goal_id: Optional[int] = None
 
 
 class IncomeUpdate(BaseModel):
@@ -36,6 +37,8 @@ class IncomeUpdate(BaseModel):
     income_date: Optional[date] = None
     is_recurring: Optional[bool] = None
     tag_ids: Optional[list[int]] = None
+    goal_id: Optional[int] = None
+    clear_goal: bool = False
 
 
 class IncomeOut(BaseModel):
@@ -51,3 +54,4 @@ class IncomeOut(BaseModel):
     is_archived: bool
     recurring_parent_id: Optional[int]
     tags: list[TagOut]
+    goal_id: Optional[int]

@@ -17,6 +17,17 @@ income_tags = Table(
     Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
 )
 
+portfolio_tags = Table(
+    "portfolio_tags",
+    Base.metadata,
+    Column(
+        "portfolio_holding_id",
+        ForeignKey("portfolio_holdings.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column("tag_id", ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class Tag(Base):
     __tablename__ = "tags"
@@ -29,3 +40,6 @@ class Tag(Base):
 
     expenses = relationship("Expense", secondary=expense_tags, back_populates="tags")
     income_entries = relationship("Income", secondary=income_tags, back_populates="tags")
+    portfolio_holdings = relationship(
+        "PortfolioHolding", secondary=portfolio_tags, back_populates="tags"
+    )

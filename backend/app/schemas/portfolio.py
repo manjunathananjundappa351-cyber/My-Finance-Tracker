@@ -4,6 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.constants import AssetType
+from app.schemas.tag import TagOut
 
 
 class PortfolioHoldingCreate(BaseModel):
@@ -20,6 +21,7 @@ class PortfolioHoldingCreate(BaseModel):
     target_price: Optional[float] = None
     stop_loss: Optional[float] = None
     notes: str = ""
+    tag_ids: list[int] = Field(default_factory=list)
 
 
 class PortfolioHoldingUpdate(BaseModel):
@@ -36,6 +38,7 @@ class PortfolioHoldingUpdate(BaseModel):
     target_price: Optional[float] = None
     stop_loss: Optional[float] = None
     notes: Optional[str] = None
+    tag_ids: Optional[list[int]] = None
 
 
 class PortfolioHoldingOut(BaseModel):
@@ -56,6 +59,7 @@ class PortfolioHoldingOut(BaseModel):
     stop_loss: Optional[float]
     notes: str
     is_archived: bool
+    tags: list[TagOut]
 
     invested_value: float
     current_value: float

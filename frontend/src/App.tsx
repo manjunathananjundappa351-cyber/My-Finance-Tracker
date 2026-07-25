@@ -9,8 +9,11 @@ import { router } from "@/router";
 import { createAppTheme } from "@/theme";
 
 export function App() {
-  const mode = useAppSelector((state) => state.theme.mode);
-  const theme = useMemo(() => createAppTheme(mode), [mode]);
+  const { mode, accentColor, fontScale, highContrast } = useAppSelector((state) => state.theme);
+  const theme = useMemo(
+    () => createAppTheme(mode, accentColor, fontScale, highContrast),
+    [mode, accentColor, fontScale, highContrast]
+  );
 
   return (
     <ThemeProvider theme={theme}>

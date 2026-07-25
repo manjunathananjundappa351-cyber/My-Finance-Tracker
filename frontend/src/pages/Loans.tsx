@@ -1,6 +1,8 @@
 import AddIcon from "@mui/icons-material/Add";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
+import RestoreIcon from "@mui/icons-material/Restore";
 import {
   Alert,
   Box,
@@ -17,6 +19,8 @@ import {
   MenuItem,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from "@mui/material";
 import { motion } from "framer-motion";
@@ -27,11 +31,13 @@ import { LoadingButton } from "@/components/LoadingButton";
 import { StatCardsSkeleton } from "@/components/Skeletons";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useQuickAdd } from "@/hooks/useQuickAdd";
 import { extractErrorMessage, useToast } from "@/hooks/useToast";
 import { Loan, LoanType } from "@/types/loan";
 import { formatCurrency } from "@/utils/format";
 
 const LOAN_TYPES: LoanType[] = ["home", "car", "education", "personal", "other"];
+type ViewMode = "active" | "archived";
 
 export function Loans() {
   useDocumentTitle("Loans");
@@ -52,15 +58,18 @@ export function Loans() {
   const [outstandingBalance, setOutstandingBalance] = useState("");
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [tenureMonths, setTenureMonths] = useState("");
+  const [notes, setNotes] = useState("");
+  const [viewMode, setViewMode] = useState<ViewMode>("active");
 
   function loadData() {
     loanApi
-      .list()
+      .list({ archived_only: viewMode === "archived" })
       .then(setLoans)
       .catch(() => setError("Could not load loans."));
   }
 
-  useEffect(loadData, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(loadData, [viewMode]);
 
   function resetForm() {
     setName("");
@@ -71,6 +80,7 @@ export function Loans() {
     setOutstandingBalance("");
     setStartDate(new Date().toISOString().slice(0, 10));
     setTenureMonths("");
+    setNotes("");
   }
 
   function openCreate() {
@@ -78,6 +88,8 @@ export function Loans() {
     resetForm();
     setDialogOpen(true);
   }
+
+  useQuickAdd(openCreate);
 
   function openEdit(loan: Loan) {
     setEditing(loan);
@@ -89,6 +101,7 @@ export function Loans() {
     setOutstandingBalance(String(loan.outstanding_balance));
     setStartDate(loan.start_date);
     setTenureMonths(String(loan.tenure_months));
+    setNotes(loan.notes);
     setDialogOpen(true);
   }
 
@@ -105,6 +118,7 @@ export function Loans() {
         outstanding_balance: parseFloat(outstandingBalance),
         start_date: startDate,
         tenure_months: parseInt(tenureMonths, 10),
+        notes,
       };
       if (editing) {
         await loanApi.update(editing.id, payload);
@@ -122,12 +136,38 @@ export function Loans() {
     }
   }
 
-  async function handleDelete(loan: Loan) {
-    const ok = await confirm("Delete loan?", `Remove "${loan.name}"?`);
+  async function handleArchive(loan: Loan) {
+    try {
+      await loanApi.archive(loan.id);
+      toast.successWithUndo(`"${loan.name}" archived`, async () => {
+        await loanApi.restore(loan.id);
+        loadData();
+      });
+      loadData();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Could not archive loan"));
+    }
+  }
+
+  async function handleRestore(loan: Loan) {
+    try {
+      await loanApi.restore(loan.id);
+      toast.success(`"${loan.name}" restored`);
+      loadData();
+    } catch (err) {
+      toast.error(extractErrorMessage(err, "Could not restore loan"));
+    }
+  }
+
+  async function handleDeletePermanently(loan: Loan) {
+    const ok = await confirm(
+      "Delete permanently?",
+      `Permanently delete "${loan.name}"? This can't be undone.`
+    );
     if (!ok) return;
     try {
       await loanApi.remove(loan.id);
-      toast.success("Loan deleted");
+      toast.success("Loan permanently deleted");
       loadData();
     } catch (err) {
       toast.error(extractErrorMessage(err, "Could not delete loan"));
@@ -142,13 +182,24 @@ export function Loans() {
 
   return (
     <Box display="flex" flexDirection="column" gap={3}>
-      <Box display="flex" justifyContent="space-between" alignItems="center">
+      <Box display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
         <Typography variant="h4" fontWeight={700} letterSpacing="-0.02em">
           Loans
         </Typography>
-        <LoadingButton variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-          Add Loan
-        </LoadingButton>
+        <Box display="flex" gap={1}>
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={viewMode}
+            onChange={(_, v) => v && setViewMode(v)}
+          >
+            <ToggleButton value="active">Active</ToggleButton>
+            <ToggleButton value="archived">Archived</ToggleButton>
+          </ToggleButtonGroup>
+          <LoadingButton variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            Add Loan
+          </LoadingButton>
+        </Box>
       </Box>
 
       {loans.length > 0 && (
@@ -181,7 +232,11 @@ export function Loans() {
       )}
 
       {loans.length === 0 ? (
-        <Alert severity="info">No loans tracked yet. Add one to monitor EMI and payoff progress.</Alert>
+        <Alert severity="info">
+          {viewMode === "archived"
+            ? "No archived loans."
+            : "No loans tracked yet. Add one to monitor EMI and payoff progress."}
+        </Alert>
       ) : (
         <Grid container spacing={2}>
           {loans.map((l, i) => (
@@ -204,12 +259,25 @@ export function Loans() {
                       </Typography>
                     </Box>
                     <Stack direction="row">
-                      <IconButton size="small" onClick={() => openEdit(l)}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                      <IconButton size="small" onClick={() => handleDelete(l)}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
+                      {viewMode === "active" ? (
+                        <>
+                          <IconButton size="small" aria-label="Edit" onClick={() => openEdit(l)}>
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" aria-label="Archive" onClick={() => handleArchive(l)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      ) : (
+                        <>
+                          <IconButton size="small" aria-label="Restore" onClick={() => handleRestore(l)}>
+                            <RestoreIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" aria-label="Delete permanently" onClick={() => handleDeletePermanently(l)}>
+                            <DeleteForeverIcon fontSize="small" />
+                          </IconButton>
+                        </>
+                      )}
                     </Stack>
                   </Stack>
                   <Typography variant="body2" color="text.secondary" mt={1}>
@@ -292,6 +360,14 @@ export function Loans() {
             type="number"
             value={tenureMonths}
             onChange={(e) => setTenureMonths(e.target.value)}
+            fullWidth
+          />
+          <TextField
+            label="Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            multiline
+            minRows={2}
             fullWidth
           />
         </DialogContent>

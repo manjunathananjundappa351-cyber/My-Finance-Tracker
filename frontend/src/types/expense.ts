@@ -20,6 +20,7 @@ export interface Expense {
   is_archived: boolean;
   recurring_parent_id: number | null;
   tags: Tag[];
+  goal_id: number | null;
 }
 
 export interface ExpenseCreatePayload {
@@ -30,4 +31,19 @@ export interface ExpenseCreatePayload {
   expense_date: string;
   is_recurring?: boolean;
   tag_ids?: number[];
+  goal_id?: number | null;
+  clear_goal?: boolean;
+}
+
+export interface ExpenseImportItem {
+  category_name: string;
+  amount: number;
+  description?: string;
+  expense_date: string;
+}
+
+export interface ExpenseBulkImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
 }

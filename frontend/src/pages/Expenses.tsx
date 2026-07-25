@@ -8,6 +8,8 @@ import MicNoneOutlinedIcon from "@mui/icons-material/MicNoneOutlined";
 import ReceiptLongOutlinedIcon from "@mui/icons-material/ReceiptLongOutlined";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import RestoreIcon from "@mui/icons-material/Restore";
+import UploadFileIcon from "@mui/icons-material/UploadFile";
+import ViewColumnIcon from "@mui/icons-material/ViewColumn";
 import {
   Alert,
   Box,
@@ -21,6 +23,8 @@ import {
   FormControlLabel,
   Grid,
   IconButton,
+  ListItemText,
+  Menu,
   MenuItem,
   Paper,
   Table,
@@ -39,18 +43,24 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { expenseApi } from "@/api/expenseApi";
+import { goalApi } from "@/api/goalApi";
 import { PieChart } from "@/components/charts/PieChart";
+import { SunburstChart } from "@/components/charts/SunburstChart";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { EmptyState } from "@/components/EmptyState";
 import { ExportMenu } from "@/components/ExportMenu";
+import { ImportExpensesDialog } from "@/components/ImportExpensesDialog";
 import { LoadingButton } from "@/components/LoadingButton";
 import { TableSkeleton } from "@/components/Skeletons";
 import { TagsInput } from "@/components/TagsInput";
 import { useConfirm } from "@/hooks/useConfirm";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLocalStorage } from "@/hooks/useLocalStorage";
+import { useQuickAdd } from "@/hooks/useQuickAdd";
 import { extractErrorMessage, useToast } from "@/hooks/useToast";
 import { useVoiceInput } from "@/hooks/useVoiceInput";
 import { Expense, ExpenseCategory } from "@/types/expense";
+import { Goal } from "@/types/goal";
 import { Tag } from "@/types/tag";
 import { formatCurrency } from "@/utils/format";
 import { parseVoiceExpense } from "@/utils/parseVoiceExpense";
@@ -58,6 +68,22 @@ import { parseVoiceExpense } from "@/utils/parseVoiceExpense";
 type SortField = "expense_date" | "amount" | "category";
 type Order = "asc" | "desc";
 type ViewMode = "active" | "archived";
+
+type OptionalColumnKey = "category" | "tags" | "goal" | "notes";
+
+const OPTIONAL_COLUMNS: { key: OptionalColumnKey; label: string }[] = [
+  { key: "category", label: "Category" },
+  { key: "tags", label: "Tags" },
+  { key: "goal", label: "Goal" },
+  { key: "notes", label: "Notes" },
+];
+
+const DEFAULT_COLUMN_PREFS: Record<OptionalColumnKey, boolean> = {
+  category: true,
+  tags: true,
+  goal: true,
+  notes: false,
+};
 
 export function Expenses() {
   useDocumentTitle("Expenses");
@@ -67,8 +93,10 @@ export function Expenses() {
 
   const [expenses, setExpenses] = useState<Expense[] | null>(null);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Expense | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -88,6 +116,14 @@ export function Expenses() {
   // bulk selection
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
+  // column visibility (persisted)
+  const [columnPrefs, setColumnPrefs] = useLocalStorage("expenses.columns", DEFAULT_COLUMN_PREFS);
+  const [columnMenuAnchor, setColumnMenuAnchor] = useState<HTMLElement | null>(null);
+
+  function toggleColumn(key: OptionalColumnKey) {
+    setColumnPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   // form fields
   const [categoryId, setCategoryId] = useState<number | "">("");
   const [amount, setAmount] = useState("");
@@ -96,6 +132,7 @@ export function Expenses() {
   const [expenseDate, setExpenseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [isRecurring, setIsRecurring] = useState(false);
   const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+  const [goalId, setGoalId] = useState<number | "">("");
 
   function loadData() {
     Promise.all([
@@ -117,6 +154,10 @@ export function Expenses() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(loadData, [startDate, endDate, filterCategoryId, viewMode]);
+
+  useEffect(() => {
+    goalApi.list().then(setGoals).catch(() => undefined);
+  }, []);
 
   const filtered = useMemo(() => {
     if (!expenses) return [];
@@ -150,6 +191,20 @@ export function Expenses() {
     return Array.from(totals.entries()).map(([name, value]) => ({ name, value }));
   }, [filtered]);
 
+  const sunburstData = useMemo(() => {
+    const groups = new Map<string, Map<string, number>>();
+    for (const e of filtered) {
+      const typeLabel = e.category.type === "need" ? "Need" : "Want";
+      if (!groups.has(typeLabel)) groups.set(typeLabel, new Map());
+      const catMap = groups.get(typeLabel)!;
+      catMap.set(e.category.name, (catMap.get(e.category.name) ?? 0) + e.amount);
+    }
+    return Array.from(groups.entries()).map(([typeLabel, catMap]) => ({
+      name: typeLabel,
+      children: Array.from(catMap.entries()).map(([name, value]) => ({ name, value })),
+    }));
+  }, [filtered]);
+
   function handleSort(field: SortField) {
     if (orderBy === field) {
       setOrder(order === "asc" ? "desc" : "asc");
@@ -168,8 +223,11 @@ export function Expenses() {
     setExpenseDate(new Date().toISOString().slice(0, 10));
     setIsRecurring(false);
     setSelectedTags([]);
+    setGoalId("");
     setDialogOpen(true);
   }
+
+  useQuickAdd(openCreate);
 
   function handleVoiceAdd() {
     if (!voice.supported) {
@@ -186,6 +244,7 @@ export function Expenses() {
       setExpenseDate(new Date().toISOString().slice(0, 10));
       setIsRecurring(false);
       setSelectedTags([]);
+      setGoalId("");
       setDialogOpen(true);
       toast.info(`Heard: "${transcript}" - review and save.`);
     });
@@ -200,6 +259,7 @@ export function Expenses() {
     setExpenseDate(expense.expense_date);
     setIsRecurring(expense.is_recurring);
     setSelectedTags(expense.tags);
+    setGoalId(expense.goal_id ?? "");
     setDialogOpen(true);
   }
 
@@ -215,6 +275,8 @@ export function Expenses() {
         expense_date: expenseDate,
         is_recurring: isRecurring,
         tag_ids: selectedTags.map((t) => t.id),
+        goal_id: goalId === "" ? null : goalId,
+        clear_goal: goalId === "" && editing?.goal_id != null,
       };
       if (editing) {
         await expenseApi.update(editing.id, payload);
@@ -365,6 +427,32 @@ export function Expenses() {
             </Tooltip>
           )}
           <ExportMenu filenameBase="expenses" rows={exportRows()} />
+          <Button
+            variant="outlined"
+            startIcon={<ViewColumnIcon />}
+            onClick={(e) => setColumnMenuAnchor(e.currentTarget)}
+          >
+            Columns
+          </Button>
+          <Menu
+            anchorEl={columnMenuAnchor}
+            open={Boolean(columnMenuAnchor)}
+            onClose={() => setColumnMenuAnchor(null)}
+          >
+            {OPTIONAL_COLUMNS.map((col) => (
+              <MenuItem key={col.key} onClick={() => toggleColumn(col.key)} dense>
+                <Checkbox size="small" checked={columnPrefs[col.key]} sx={{ p: 0, mr: 1 }} />
+                <ListItemText primary={col.label} />
+              </MenuItem>
+            ))}
+          </Menu>
+          <Button
+            variant="outlined"
+            startIcon={<UploadFileIcon />}
+            onClick={() => setImportDialogOpen(true)}
+          >
+            Import CSV
+          </Button>
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             Add Expense
           </Button>
@@ -467,16 +555,21 @@ export function Expenses() {
                         Date
                       </TableSortLabel>
                     </TableCell>
-                    <TableCell sortDirection={orderBy === "category" ? order : false}>
-                      <TableSortLabel
-                        active={orderBy === "category"}
-                        direction={orderBy === "category" ? order : "asc"}
-                        onClick={() => handleSort("category")}
-                      >
-                        Category
-                      </TableSortLabel>
-                    </TableCell>
+                    {columnPrefs.category && (
+                      <TableCell sortDirection={orderBy === "category" ? order : false}>
+                        <TableSortLabel
+                          active={orderBy === "category"}
+                          direction={orderBy === "category" ? order : "asc"}
+                          onClick={() => handleSort("category")}
+                        >
+                          Category
+                        </TableSortLabel>
+                      </TableCell>
+                    )}
                     <TableCell>Description</TableCell>
+                    {columnPrefs.tags && <TableCell>Tags</TableCell>}
+                    {columnPrefs.goal && <TableCell>Goal</TableCell>}
+                    {columnPrefs.notes && <TableCell>Notes</TableCell>}
                     <TableCell align="right" sortDirection={orderBy === "amount" ? order : false}>
                       <TableSortLabel
                         active={orderBy === "amount"}
@@ -500,7 +593,7 @@ export function Expenses() {
                         />
                       </TableCell>
                       <TableCell>{e.expense_date}</TableCell>
-                      <TableCell>{e.category.name}</TableCell>
+                      {columnPrefs.category && <TableCell>{e.category.name}</TableCell>}
                       <TableCell>
                         <Box display="flex" alignItems="center" gap={0.5} flexWrap="wrap">
                           {e.description}
@@ -509,33 +602,56 @@ export function Expenses() {
                               <RepeatIcon sx={{ fontSize: 14, color: "text.secondary" }} />
                             </Tooltip>
                           )}
-                          {e.tags.map((t) => (
-                            <Chip
-                              key={t.id}
-                              label={t.name}
-                              size="small"
-                              sx={{ bgcolor: t.color, color: "#fff", height: 18, fontSize: 11 }}
-                            />
-                          ))}
                         </Box>
                       </TableCell>
+                      {columnPrefs.tags && (
+                        <TableCell>
+                          <Box display="flex" gap={0.5} flexWrap="wrap">
+                            {e.tags.map((t) => (
+                              <Chip
+                                key={t.id}
+                                label={t.name}
+                                size="small"
+                                sx={{ bgcolor: t.color, color: "#fff", height: 18, fontSize: 11 }}
+                              />
+                            ))}
+                          </Box>
+                        </TableCell>
+                      )}
+                      {columnPrefs.goal && (
+                        <TableCell>
+                          {e.goal_id != null && (
+                            <Chip
+                              label={goals.find((g) => g.id === e.goal_id)?.name ?? "Goal"}
+                              size="small"
+                              variant="outlined"
+                              sx={{ height: 18, fontSize: 11 }}
+                            />
+                          )}
+                        </TableCell>
+                      )}
+                      {columnPrefs.notes && (
+                        <TableCell sx={{ maxWidth: 160, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {e.notes}
+                        </TableCell>
+                      )}
                       <TableCell align="right">{formatCurrency(e.amount)}</TableCell>
                       <TableCell align="right">
                         {viewMode === "active" ? (
                           <>
-                            <IconButton size="small" onClick={() => openEdit(e)}>
+                            <IconButton size="small" aria-label="Edit" onClick={() => openEdit(e)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => handleArchive(e)}>
+                            <IconButton size="small" aria-label="Archive" onClick={() => handleArchive(e)}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </>
                         ) : (
                           <>
-                            <IconButton size="small" onClick={() => handleRestore(e)}>
+                            <IconButton size="small" aria-label="Restore" onClick={() => handleRestore(e)}>
                               <RestoreIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" onClick={() => handleDeletePermanently(e)}>
+                            <IconButton size="small" aria-label="Delete permanently" onClick={() => handleDeletePermanently(e)}>
                               <DeleteForeverIcon fontSize="small" />
                             </IconButton>
                           </>
@@ -545,7 +661,11 @@ export function Expenses() {
                   ))}
                   {filtered.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
+                      <TableCell
+                        colSpan={5 + Object.values(columnPrefs).filter(Boolean).length}
+                        align="center"
+                        sx={{ py: 4 }}
+                      >
                         <Typography color="text.secondary">
                           No expenses match your filters.
                         </Typography>
@@ -575,6 +695,13 @@ export function Expenses() {
               <PieChart title="By Category" data={allocation} />
             </Paper>
           </Grid>
+          {sunburstData.length > 0 && (
+            <Grid item xs={12}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <SunburstChart title="Need vs Want → Category" data={sunburstData} />
+              </Paper>
+            </Grid>
+          )}
         </Grid>
       )}
 
@@ -617,6 +744,20 @@ export function Expenses() {
           />
           <TagsInput value={selectedTags} onChange={setSelectedTags} />
           <TextField
+            select
+            label="Link to Goal (optional)"
+            value={goalId}
+            onChange={(e) => setGoalId(e.target.value === "" ? "" : Number(e.target.value))}
+            fullWidth
+          >
+            <MenuItem value="">No goal</MenuItem>
+            {goals.map((g) => (
+              <MenuItem key={g.id} value={g.id}>
+                {g.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
             label="Notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -638,6 +779,11 @@ export function Expenses() {
           </LoadingButton>
         </DialogActions>
       </Dialog>
+      <ImportExpensesDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        onImported={loadData}
+      />
       {ConfirmDialog}
     </Box>
   );

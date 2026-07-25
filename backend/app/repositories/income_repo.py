@@ -81,6 +81,7 @@ def create_income(
     recurring_parent_id: Optional[int] = None,
     notes: str = "",
     tags: Optional[list[Tag]] = None,
+    goal_id: Optional[int] = None,
 ) -> Income:
     income = Income(
         user_id=user_id,
@@ -92,6 +93,7 @@ def create_income(
         is_recurring=is_recurring,
         recurring_parent_id=recurring_parent_id,
         tags=tags or [],
+        goal_id=goal_id,
     )
     db.add(income)
     db.commit()
@@ -132,6 +134,23 @@ def set_archived(db: Session, income: Income, archived: bool) -> Income:
     db.commit()
     db.refresh(income)
     return income
+
+
+def set_goal(db: Session, income: Income, goal_id: Optional[int]) -> Income:
+    income.goal_id = goal_id
+    db.commit()
+    db.refresh(income)
+    return income
+
+
+def list_by_goal(db: Session, user_id: int, goal_id: int) -> list[Income]:
+    stmt = (
+        select(Income)
+        .options(joinedload(Income.category))
+        .where(Income.user_id == user_id, Income.goal_id == goal_id)
+        .order_by(Income.income_date.desc())
+    )
+    return list(db.execute(stmt).unique().scalars().all())
 
 
 def delete_income(db: Session, income: Income) -> None:

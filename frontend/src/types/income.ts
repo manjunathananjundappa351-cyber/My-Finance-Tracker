@@ -17,6 +17,7 @@ export interface Income {
   is_archived: boolean;
   recurring_parent_id: number | null;
   tags: Tag[];
+  goal_id: number | null;
 }
 
 export interface IncomeCreatePayload {
@@ -27,4 +28,6 @@ export interface IncomeCreatePayload {
   income_date: string;
   is_recurring?: boolean;
   tag_ids?: number[];
+  goal_id?: number | null;
+  clear_goal?: boolean;
 }
